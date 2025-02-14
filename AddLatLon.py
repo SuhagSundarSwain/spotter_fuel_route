@@ -1,11 +1,11 @@
 import pandas as pd
 import requests
+from os import getenv
 
 fuel_stations = pd.read_csv("fuel-prices-for-be-assessment.csv")
 
 URL = "https://api.geoapify.com/v1/geocode/search"
-API_KEY = "c4d0e19b379d4f41832576f4f0cc1790"
-
+API_KEY = getenv("API_KEY")
 def getFeatures(search_address):
     params = {
             "text":search_address,
@@ -38,8 +38,8 @@ for index,row in fuel_stations.iterrows():
         completed_locations.add(search_address)
         success_count += 1
         print(f"{search_address} -->lat: {lat}, lon:{lon}")
-        # fuel_stations.at[index,"lat"] = lat
-        # fuel_stations.at[index,"lon"] = lon
+        fuel_stations.at[index,"lat"] = lat
+        fuel_stations.at[index,"lon"] = lon
     except Exception as e:
         error_count += 1
         print(f"Error processing {search_address[0]}: {e}")
@@ -49,4 +49,4 @@ print(f"Total Successful: {success_count}")
 print(f"Total Errors: {error_count}")
 
 
-# fuel_stations.to_csv("fuel_stations_with_lat_lon.csv",index=False)
+fuel_stations.to_csv("fuel_stations_with_lat_lon.csv",index=False)
