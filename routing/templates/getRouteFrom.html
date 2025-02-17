@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Route Finder</title>
+    <link rel="stylesheet" type="text/css" href="static/css/styles.css" />
+    <style>
+      input[type="text"] {
+        width: 90%;
+        padding: 0.5rem;
+        margin-bottom: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body class="form-body">
+    <div class="container">
+      <h1>Spotter Route Finder</h1>
+      <form id="routeForm">
+        <div>
+          <label class="label" for="start">Start Location:</label>
+          <input
+            type="text"
+            id="start"
+            name="start"
+            placeholder="Enter start location"
+            required
+          />
+        </div>
+        <div>
+          <label class="label" for="end">End Location:</label>
+          <input
+            type="text"
+            id="end"
+            name="end"
+            placeholder="Enter end location"
+            required
+          />
+        </div>
+        <button class="get-route-button" type="submit">Get Route</button>
+      </form>
+    </div>
+
+    <script>
+      document
+        .getElementById("routeForm")
+        .addEventListener("submit", function (e) {
+          e.preventDefault(); // Prevent default form submission
+          // Retrieve values from the form fields
+          const start = document.getElementById("start").value;
+          const end = document.getElementById("end").value;
+          // Redirect to /map with the start and end parameters in the URL
+          window.location.href = `/map?start=${encodeURIComponent(
+            start
+          )}&end=${encodeURIComponent(end)}`;
+        });
+    </script>
+  </body>
+</html>

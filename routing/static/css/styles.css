@@ -1,4 +1,4 @@
-body {
+.map-body {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -10,4 +10,37 @@ body {
 
 .fuel-price {
   color: green;
+}
+
+.form-body {
+  font-family: Arial, sans-serif;
+  padding: 2rem;
+  background: #f4f4f4;
+}
+
+.container {
+  max-width: 400px;
+  margin: auto;
+  background: white;
+  padding: 1rem;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.get-route-button {
+  padding: 0.7rem 1.5rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.get-route-button:hover {
+  background: #0056b3;
 }

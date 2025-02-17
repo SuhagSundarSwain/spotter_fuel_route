@@ -15,11 +15,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from routing.views import get_route_with_fuel_stopage,mapView,home
+from routing.views import get_route_fuel_stop_api,mapView,home
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("",home),
-    path("getroute",get_route_with_fuel_stopage),
+    path("getroute",get_route_fuel_stop_api),
     path("map",mapView)
 ]
