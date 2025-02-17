@@ -5,6 +5,7 @@ from os import getenv
 from django.http import JsonResponse
 from .models import FuelStation
 import logging
+from django.shortcuts import render,redirect
 
 # Logger Setup
 logger = logging.getLogger(__name__)
@@ -85,66 +86,58 @@ def get_nearby_fuel_stations(route_coords):
 
 # Find optimal fuel stops along the route
 def get_optimal_fuel_stops(route_distance, fuel_stations_nearby, route_coords, steps):
-
-    vehicle_range = MAX_VEHICLE_RANGE
+    vehicle_range = MAX_VEHICLE_RANGE  # Maximum distance with a full tank
     miles_per_gallon = MILES_PER_GALLON
 
-    # Calculate total fuel required for the route
-    total_fuel_needed = route_distance / miles_per_gallon
     total_cost = 0
     fuel_stops = []
 
-    # Initialize the current distance traveled
-    current_distance = 0
-    current_index = 0  # Index to track route coordinates
+    current_position = route_coords[0]
+    destination = route_coords[-1]
 
-    # Sort the fuel stations by fuel price (cheapest first)
+    # Sort stations by price (cheaper first); further filtering will be applied below
     sorted_stations = sorted(fuel_stations_nearby, key=lambda x: x["retail_price"])
 
-    # Iterate through the route steps
-    for step in steps:
-        segment_distance = step['distance']  # Distance in the current segment
-        
-        # If the current segment is within the vehicle's range, search for the best fuel station
-        if segment_distance <= vehicle_range:
-            # Find the fuel stations within the range of this segment
-            available_stations = []
-            search_range = current_distance + vehicle_range
+    # Continue fueling until destination is reachable on a full tank
+    while haversine(current_position[0], current_position[1], destination[0], destination[1]) > vehicle_range:
+        candidates = []
+        for station in sorted_stations:
+            # Distance from current position to this station
+            station_distance = haversine(
+                current_position[0], current_position[1],
+                station["latitude"], station["longitude"]
+            )
+            # Check if station is within range
+            if station_distance <= vehicle_range:
+                # Ensure the station is ahead in the route:
+                # Its distance to the destination should be less than that from our current position.
+                if haversine(station["latitude"], station["longitude"], destination[0], destination[1]) < \
+                   haversine(current_position[0], current_position[1], destination[0], destination[1]):
+                    candidates.append((station, station_distance))
 
-            for station in sorted_stations:
-                # Calculate the distance from the current point (route_coords[current_index])
-                station_distance = haversine(route_coords[current_index][0], route_coords[current_index][1], station["latitude"], station["longitude"])
-                if current_distance < station_distance <= search_range:
-                    available_stations.append(station)
+        # If no candidate is found, then the route cannot be completed with the given stations.
+        if not candidates:
+            raise Exception("No reachable fuel station found ahead within range; route not feasible.")
 
-            # If there are no stations available, continue to the next step
-            if not available_stations:
-                continue
+        # Choose the optimal candidate (here: the one with the lowest fuel price)
+        next_stop, distance_to_next = min(candidates, key=lambda x: x[0]["retail_price"])
 
-            # Select the cheapest station from the available ones in the range
-            next_stop = min(available_stations, key=lambda x: x["retail_price"])
+        # Record this stop
+        fuel_stops.append(next_stop)
 
-            # Add the selected stop to the list
-            fuel_stops.append(next_stop)
+        # Calculate fuel cost for reaching this station
+        fuel_needed = distance_to_next / miles_per_gallon
+        total_cost += fuel_needed * next_stop["retail_price"]
 
-            # Calculate the fuel cost for this segment
-            segment_distance = haversine(route_coords[current_index][0], route_coords[current_index][1], next_stop["latitude"], next_stop["longitude"])
-            fuel_needed = segment_distance / miles_per_gallon
-            fuel_cost = fuel_needed * next_stop["retail_price"]
-            total_cost += fuel_cost
+        # "Fill the tank" and update current position to the new stop's location
+        current_position = [next_stop["latitude"], next_stop["longitude"]]
 
-            # Update the current distance and index to the fuel stop
-            current_distance += segment_distance
-            current_index += 1
+        # Remove this station from further consideration to ignore passed stations
+        sorted_stations.remove(next_stop)
 
-            # Remove the selected station from further consideration
-            sorted_stations = [station for station in sorted_stations if station != next_stop]
-            
-            # If the vehicle has reached its destination, break the loop
-            if current_distance >= route_distance:
-                break
-    
     return fuel_stops, total_cost
+
+
 
 
 
@@ -168,10 +161,84 @@ def get_route_with_fuel_stopage(request):
         fuel_stations_nearby = get_nearby_fuel_stations(route_coords)
         optimal_stops, total_fuel_cost = get_optimal_fuel_stops(route_distance, fuel_stations_nearby, route_coords, steps)
 
-        return JsonResponse({"route": route_coords, "fuel_stops": optimal_stops, "total_fuel_cost": total_fuel_cost})
+        return {"steps":steps,"route": route_coords, "fuel_stops": optimal_stops, "total_fuel_cost": total_fuel_cost}
 
     except KeyError as e:
         return JsonResponse({"error": str(e)}, status=400)
     except Exception as e:
         logger.error(f"Error: {e}")
         return JsonResponse({"error": str(e)}, status=500)
+
+
+def home(request):
+    return redirect("/map")
+
+
+# style=osm-liberty&width=1700&height=500&zoom=13&apiKey=c4d0e19b379d4f41832576f4f0cc1790&marker=lonlat:-122.4193286,37.7792588;color:%23ff0000;size:medium|lonlat:-74.0060152,40.7127281;color:%23ff0000;size:medium
+
+import json
+import urllib.parse
+from django.shortcuts import render
+
+def mapView(request):
+    fuel_stopage_response = get_route_with_fuel_stopage(request)
+
+    steps = fuel_stopage_response.get('steps')
+    route = fuel_stopage_response.get('route')
+
+    # Swap the coordinates in each pair
+    route = [[b, a] for a, b in route]
+
+    # Create markers for fuel stops using double quotes for the f-string
+    markers = [
+        f"lonlat:{stop.get('longitude')},{stop.get('latitude')};color:blue;size:medium;icon:gas-pump;icontype:awesome;strokecolor:%23000000;shadow:no"
+        for stop in fuel_stopage_response.get("fuel_stops", [])
+    ]
+    
+    # Add start and end markers with a different color (red)
+    markers.extend([
+        f"lonlat:{route[0][0]},{route[0][1]};color:%23ff0000;size:medium",
+        f"lonlat:{route[-1][0]},{route[-1][1]};color:%23ff0000;size:medium"
+    ])
+    markers = "|".join(markers)
+
+    route = [route[0]] + [[stop.get('longitude'), stop.get('latitude')] for stop in fuel_stopage_response.get("fuel_stops", [])] + [route[-1]]
+
+    # Print route for debugging purposes
+    print(route)
+
+    # Create GeoJSON data for the route
+    geojson_data = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": route
+                },
+                "properties": {
+                    "stroke-color": "blue",
+                    "stroke-width": 5
+                }
+            }
+        ]
+    }
+
+    # Encode GeoJSON for URL use
+    geojson_str = json.dumps(geojson_data)
+    encoded_geojson = urllib.parse.quote(geojson_str)
+
+    # Build the map link using the API key (ensure API_KEY is defined in your settings)
+    mapLink = (
+        'https://maps.geoapify.com/v1/staticmap?'
+        'style=osm-liberty'
+        '&width=1700'
+        '&height=800'
+        '&zoom=12'
+        f'&marker={markers}'
+        f'&geojson={encoded_geojson}'
+        f'&apiKey={API_KEY}'
+    )
+    
+    return render(request, "mapView.html", {"mapLink": mapLink,"fuel_cost":fuel_stopage_response.get('total_fuel_cost')})

@@ -1,0 +1,13 @@
+body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.fuel-cost {
+  font-weight: bold;
+}
+
+.fuel-price {
+  color: green;
+}
